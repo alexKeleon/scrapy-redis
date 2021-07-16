@@ -80,7 +80,14 @@ class FifoQueue(Base):
     def pop(self, timeout=0):
         """Pop a request"""
         if timeout > 0:
-            data = self.server.brpop(self.key, timeout)
+            # 一秒钟去看看有没有数据
+            while timeout > 0:
+                data = self.server.rpop(self.key)
+                if data:
+                    break
+                time.sleep(1)
+                timeout = timeout - 1
+
             if isinstance(data, tuple):
                 data = data[1]
         else:
@@ -134,7 +141,7 @@ class LifoQueue(Base):
         """Pop a request"""
         if timeout > 0:
             # 一秒钟去看看有没有数据
-            while (timeout > 0):
+            while timeout > 0:
                 data = self.server.lpop(self.key)
                 if data:
                     break
