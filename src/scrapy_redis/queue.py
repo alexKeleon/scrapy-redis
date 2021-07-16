@@ -2,6 +2,8 @@ from scrapy.utils.reqser import request_to_dict, request_from_dict
 
 from . import picklecompat
 
+import time
+
 
 class Base(object):
     """Per-spider base queue class"""
@@ -131,7 +133,14 @@ class LifoQueue(Base):
     def pop(self, timeout=0):
         """Pop a request"""
         if timeout > 0:
-            data = self.server.blpop(self.key, timeout)
+            # 一秒钟去看看有没有数据
+            while (timeout > 0):
+                data = self.server.lpop(self.key)
+                if data:
+                    break
+                time.sleep(1)
+                timeout = timeout - 1
+
             if isinstance(data, tuple):
                 data = data[1]
         else:

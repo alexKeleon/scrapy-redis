@@ -28,20 +28,20 @@ def read_requirements(filename):
 
 
 setup(
-    name='scrapy-redis',
+    name='deepctrl-scrapy-redis',
     version=read_file('VERSION'),
     description="Redis-based components for Scrapy.",
     long_description=read_rst('README.rst') + '\n\n' + read_rst('HISTORY.rst'),
-    author="Rolando Espinoza",
+    author="yihcao.wu",
     author_email='rolando@rmax.io',
-    url='https://github.com/rolando/scrapy-redis',
+    url='https://github.com/alexKeleon/scrapy-redis',
     packages=list(find_packages('src')),
     package_dir={'': 'src'},
     setup_requires=read_requirements('requirements-setup.txt'),
     install_requires=read_requirements('requirements-install.txt'),
     include_package_data=True,
     license="MIT",
-    keywords='scrapy-redis',
+    keywords='deepctrl-scrapy-redis',
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
