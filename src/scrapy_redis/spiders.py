@@ -89,17 +89,13 @@ class RedisMixin(object):
         crawler.signals.connect(self.spider_idle, signal=signals.spider_idle)
 
     def pop_list_queue(self, redis_key, batch_size):
-        with self.server.pipeline() as pipe:
-            pipe.lrange(redis_key, 0, batch_size - 1)
-            pipe.ltrim(redis_key, batch_size, -1)
-            datas, _ = pipe.execute()
+        datas = self.server.lrange(redis_key, 0, batch_size - 1)
+        self.server.ltrim(redis_key, batch_size, -1)
         return datas
 
     def pop_priority_queue(self, redis_key, batch_size):
-        with self.server.pipeline() as pipe:
-            pipe.zrevrange(redis_key, 0, batch_size - 1)
-            pipe.zremrangebyrank(redis_key, -batch_size, -1)
-            datas, _ = pipe.execute()
+        datas = self.server.zrevrange(redis_key, 0, batch_size - 1)
+        self.server.zremrangebyrank(redis_key, -batch_size, -1)
         return datas
 
     def next_requests(self):
