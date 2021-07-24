@@ -6,6 +6,7 @@ from scrapy.utils.request import request_fingerprint
 
 from . import defaults
 from .connection import get_redis_from_settings
+from .bucket_hash import BucketHash
 
 
 logger = logging.getLogger(__name__)
@@ -36,8 +37,10 @@ class RFPDupeFilter(BaseDupeFilter):
         """
         self.server = server
         self.key = key
+        self.exist_bucket_key = self.key + "_exist_bucket"
         self.debug = debug
         self.logdupes = True
+        self.bucket = BucketHash(10000)
 
     @classmethod
     def from_settings(cls, settings):
@@ -97,7 +100,11 @@ class RFPDupeFilter(BaseDupeFilter):
         """
         fp = self.request_fingerprint(request)
         # This returns the number of values added, zero if already exists.
-        added = self.server.sadd(self.key, fp)
+        bucket = str(self.bucket.mapping(fp))
+        bucket_key = self.key + "_" + bucket
+        added = self.server.sadd(bucket_key, fp)
+        self.server.sadd(self.exist_bucket_key, bucket)
+        # 需要在结束时清理这些key
         return added == 0
 
     def request_fingerprint(self, request):

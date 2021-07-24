@@ -1,12 +1,18 @@
 from scrapy.utils.reqser import request_to_dict, request_from_dict
 
 from . import picklecompat
-
+import logging
 import time
+from .bucket_hash import BucketHash
+from scrapy.utils.request import request_fingerprint
+
+logger = logging.getLogger(__name__)
 
 
 class Base(object):
     """Per-spider base queue class"""
+
+    logger = logger
 
     def __init__(self, server, spider, key, serializer=None):
         """Initialize per-spider redis queue.
@@ -37,7 +43,10 @@ class Base(object):
         self.server = server
         self.spider = spider
         self.key = key % {'spider': spider.name}
+        self.exist_bucket_key = self.key + "_exist_key"
         self.serializer = serializer
+        # 对url进行分桶
+        self.bucket = BucketHash(10)
 
     def _encode_request(self, request):
         """Encode a request object"""
@@ -75,21 +84,32 @@ class FifoQueue(Base):
 
     def push(self, request):
         """Push a request"""
-        self.server.lpush(self.key, self._encode_request(request))
+        fp = request_fingerprint(request)
+        bucket = str(self.bucket.mapping(fp))
+        bucket_key = self.key + "_" + bucket
+        self.server.lpush(bucket_key, self._encode_request(request))
+        logger.debug("[lpush] key is {}, fp is {}".format(bucket_key, fp))
+        # 某order requests下存在的桶
+        self.server.lpush(self.exist_bucket_key, bucket)
+        logger.debug("[lpush-bucket] exsit buket key is {}, bucket is {}".format(self.exist_bucket_key, bucket))
 
     def pop(self, timeout=0):
         """Pop a request"""
+        data = None
         if timeout > 0:
             # 一秒钟去看看有没有数据
             while timeout > 0:
-                data = self.server.rpop(self.key)
-                if data:
-                    break
+                bucket = self.server.rpop(self.exist_bucket_key)
+                logger.debug("[rpop-bucket] bucket key is {}, bucket is {}".format(self.exist_bucket_key, bucket))
+                if bucket:
+                    data = self.server.rpop(self.key + "_" + bucket.decode("utf-8"))
+                    logger.debug("[rpop] key is {}, data is {}".format(self.key + "_" + bucket.decode("utf-8"), self._decode_request(data)))
+                    if data:
+                        if isinstance(data, tuple):
+                            data = data[1]
+                        break
                 time.sleep(1)
                 timeout = timeout - 1
-
-            if isinstance(data, tuple):
-                data = data[1]
         else:
             data = self.server.rpop(self.key)
         if data:
