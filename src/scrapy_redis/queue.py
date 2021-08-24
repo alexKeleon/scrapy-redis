@@ -112,8 +112,9 @@ class FifoQueue(Base):
 
                 if bucket:
                     data = self.server.rpop(self.key + "_" + bucket.decode("utf-8"))
-                    logger.debug("[rpop] key is {}, data is {}".format(self.key + "_" + bucket.decode("utf-8"), self._decode_request(data)))
                     if data:
+                        logger.debug("[rpop] key is {}, data is {}".format(self.key + "_" + bucket.decode("utf-8"),
+                                                                           self._decode_request(data)))
                         self.server.hincrby(self.exist_bucket_key, bucket, -1)
                         if isinstance(data, tuple):
                             data = data[1]
