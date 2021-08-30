@@ -100,11 +100,14 @@ class RFPDupeFilter(BaseDupeFilter):
         """
         fp = self.request_fingerprint(request)
         # This returns the number of values added, zero if already exists.
+        logger.info("[request_seen] fp is {} start", fp)
         bucket = str(self.bucket.mapping(fp))
         bucket_key = self.key + "_" + bucket
         added = self.server.sadd(bucket_key, fp)
         self.server.sadd(self.exist_bucket_key, bucket)
         # 需要在结束时清理这些key
+        logger.info("[request_seen] fp is {} end", fp)
+
         return added == 0
 
     def request_fingerprint(self, request):

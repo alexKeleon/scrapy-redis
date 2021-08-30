@@ -136,23 +136,45 @@ class PriorityQueue(Base):
 
     def push(self, request):
         """Push a request"""
+        fp = request_fingerprint(request)
+        logger.info("[push] fp is {} start", fp)
+        bucket = str(self.bucket.mapping(fp))
+        bucket_key = self.key + "_" + bucket
+
         data = self._encode_request(request)
         score = -request.priority
         # We don't use zadd method as the order of arguments change depending on
         # whether the class is Redis or StrictRedis, and the option of using
         # kwargs only accepts strings, not bytes.
-        self.server.execute_command('ZADD', self.key, score, data)
+        self.server.execute_command('ZADD', bucket_key, score, data)
+        self.server.hincrby(self.exist_bucket_key, bucket, 1)
+        logger.info("[hincrby-bucket] exsit buket key is {}, bucket is {}".format(self.exist_bucket_key, bucket))
+        logger.info("[push] fp is {} end", fp)
 
     def pop(self, timeout=0):
         """
         Pop a request
         timeout not support in this queue class
         """
-        # use atomic range/remove using multi/exec
-        pipe = self.server.pipeline()
-        pipe.multi()
-        pipe.zrange(self.key, 0, 0).zremrangebyrank(self.key, 0, 0)
-        results, count = pipe.execute()
+        logger.info("[pop] key is {} start", self.key)
+        bucket = None
+        bucket_count_map = self.server.hgetall(self.exist_bucket_key)
+        if bucket_count_map:
+            for entry in bucket_count_map:
+                if int(bucket_count_map[entry].decode('utf-8')) > 0:
+                    # 拿到有效桶号
+                    bucket = entry
+                    logger.info("[hgetall-bucket] bucket key is {}, bucket is {}".format(self.exist_bucket_key, bucket))
+                    break
+        if not bucket:
+            return None
+
+        bucket_key = self.key + "_" + bucket.decode("utf-8")
+        logger.info("[pop] bucket_key is {} start", bucket_key)
+        results = self.server.zrange(bucket_key, 0, 0)
+        count = self.server.zremrangebyrank(bucket_key, 0, 0)
+        self.server.hincrby(self.exist_bucket_key, bucket, -1)
+        logger.info("[pop] key is {} end", self.key)
         if results:
             return self._decode_request(results[0])
 
