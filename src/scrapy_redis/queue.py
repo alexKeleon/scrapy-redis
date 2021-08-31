@@ -46,7 +46,7 @@ class Base(object):
         self.exist_bucket_key = self.key + "_exist_bucket"
         self.serializer = serializer
         # 对url进行分桶
-        self.bucket = BucketHash(10000)
+        self.bucket = BucketHash(1000)
 
     def _encode_request(self, request):
         """Encode a request object"""
@@ -137,7 +137,7 @@ class PriorityQueue(Base):
     def push(self, request):
         """Push a request"""
         fp = request_fingerprint(request)
-        logger.info("[push] fp is {} start", fp)
+        logger.debug("[push] fp is {} start".format(fp))
         bucket = str(self.bucket.mapping(fp))
         bucket_key = self.key + "_" + bucket
 
@@ -146,17 +146,30 @@ class PriorityQueue(Base):
         # We don't use zadd method as the order of arguments change depending on
         # whether the class is Redis or StrictRedis, and the option of using
         # kwargs only accepts strings, not bytes.
+        if score == 0:
+            logger.info("[push] request url is {}".format(request.url))
+            bucket_key = self.key + "_" + "1001"
+        logging.debug("[zadd] buket_key is {} start...".format(bucket_key))
         self.server.execute_command('ZADD', bucket_key, score, data)
+        logging.debug("[zadd] buket_key is {} end...".format(bucket_key))
         self.server.hincrby(self.exist_bucket_key, bucket, 1)
-        logger.info("[hincrby-bucket] exsit buket key is {}, bucket is {}".format(self.exist_bucket_key, bucket))
-        logger.info("[push] fp is {} end", fp)
+        logger.debug("[hincrby-bucket] exsit buket key is {}, bucket is {}".format(self.exist_bucket_key, bucket))
+        logger.debug("[push] fp is {} end".format(fp))
 
     def pop(self, timeout=0):
         """
         Pop a request
         timeout not support in this queue class
         """
-        logger.info("[pop] key is {} start", self.key)
+        logger.debug("[pop] key is {} start".format(self.key))
+        # 先读优先级桶, 桶号为bucket_size + 1, 读最高优先级的桶，如果有直接返回
+        bucket_key = self.key + "_" + "1001"
+        logger.debug("[pop] bucket_key is {} start".format(bucket_key))
+        results = self.server.zrange(bucket_key, 0, 0)
+        count = self.server.zremrangebyrank(bucket_key, 0, 0)
+        logger.debug("[pop] bucket_key is {} end".format(bucket_key))
+        if results:
+            return self._decode_request(results[0])
         bucket = None
         bucket_count_map = self.server.hgetall(self.exist_bucket_key)
         if bucket_count_map:
@@ -164,17 +177,17 @@ class PriorityQueue(Base):
                 if int(bucket_count_map[entry].decode('utf-8')) > 0:
                     # 拿到有效桶号
                     bucket = entry
-                    logger.info("[hgetall-bucket] bucket key is {}, bucket is {}".format(self.exist_bucket_key, bucket))
+                    logger.debug("[hgetall-bucket] bucket key is {}, bucket is {}".format(self.exist_bucket_key, bucket))
                     break
         if not bucket:
             return None
 
         bucket_key = self.key + "_" + bucket.decode("utf-8")
-        logger.info("[pop] bucket_key is {} start", bucket_key)
+        logger.debug("[pop] bucket_key is {} start".format(bucket_key))
         results = self.server.zrange(bucket_key, 0, 0)
         count = self.server.zremrangebyrank(bucket_key, 0, 0)
+        logger.debug("[pop] bucket_key is {} end".format(bucket_key))
         self.server.hincrby(self.exist_bucket_key, bucket, -1)
-        logger.info("[pop] key is {} end", self.key)
         if results:
             return self._decode_request(results[0])
 

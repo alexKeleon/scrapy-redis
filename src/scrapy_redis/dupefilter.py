@@ -40,7 +40,7 @@ class RFPDupeFilter(BaseDupeFilter):
         self.exist_bucket_key = self.key + "_exist_bucket"
         self.debug = debug
         self.logdupes = True
-        self.bucket = BucketHash(10000)
+        self.bucket = BucketHash(1000)
 
     @classmethod
     def from_settings(cls, settings):
@@ -68,6 +68,7 @@ class RFPDupeFilter(BaseDupeFilter):
         # TODO: Use SCRAPY_JOB env as default and fallback to timestamp.
         key = defaults.DUPEFILTER_KEY % {'timestamp': int(time.time())}
         debug = settings.getbool('DUPEFILTER_DEBUG')
+        predict_url = settings.get('worker.restful')
         return cls(server, key=key, debug=debug)
 
     @classmethod
@@ -98,15 +99,16 @@ class RFPDupeFilter(BaseDupeFilter):
         bool
 
         """
+
         fp = self.request_fingerprint(request)
         # This returns the number of values added, zero if already exists.
-        logger.info("[request_seen] fp is {} start", fp)
+        logger.debug("[request_seen] fp is {} start".format(fp))
         bucket = str(self.bucket.mapping(fp))
         bucket_key = self.key + "_" + bucket
         added = self.server.sadd(bucket_key, fp)
         self.server.sadd(self.exist_bucket_key, bucket)
         # 需要在结束时清理这些key
-        logger.info("[request_seen] fp is {} end", fp)
+        logger.debug("[request_seen] fp is {} end".format(fp))
 
         return added == 0
 
