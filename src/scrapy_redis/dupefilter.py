@@ -22,7 +22,7 @@ class RFPDupeFilter(BaseDupeFilter):
 
     logger = logger
 
-    def __init__(self, server, key, debug=False):
+    def __init__(self, server, key, debug=False, bucket_size=100):
         """Initialize the duplicates filter.
 
         Parameters
@@ -40,7 +40,7 @@ class RFPDupeFilter(BaseDupeFilter):
         self.exist_bucket_key = self.key + "_exist_bucket"
         self.debug = debug
         self.logdupes = True
-        self.bucket = BucketHash(1000)
+        self.bucket = BucketHash(bucket_size)
 
     @classmethod
     def from_settings(cls, settings):
@@ -68,8 +68,8 @@ class RFPDupeFilter(BaseDupeFilter):
         # TODO: Use SCRAPY_JOB env as default and fallback to timestamp.
         key = defaults.DUPEFILTER_KEY % {'timestamp': int(time.time())}
         debug = settings.getbool('DUPEFILTER_DEBUG')
-        predict_url = settings.get('worker.restful')
-        return cls(server, key=key, debug=debug)
+        bucket_size = settings.getint('SCHEDULER_QUEUE_BUCKET_SIZE')
+        return cls(server, key=key, debug=debug, bucket_size=bucket_size)
 
     @classmethod
     def from_crawler(cls, crawler):
@@ -133,7 +133,9 @@ class RFPDupeFilter(BaseDupeFilter):
         dupefilter_key = settings.get("SCHEDULER_DUPEFILTER_KEY", defaults.SCHEDULER_DUPEFILTER_KEY)
         key = dupefilter_key % {'spider': spider.name}
         debug = settings.getbool('DUPEFILTER_DEBUG')
-        return cls(server, key=key, debug=debug)
+        bucket_size = settings.getint('SCHEDULER_QUEUE_BUCKET_SIZE')
+        logger.info("dupefiler bucket size is {}".format(bucket_size))
+        return cls(server, key=key, debug=debug, bucket_size=bucket_size)
 
     def close(self, reason=''):
         """Delete data on close. Called by Scrapy's scheduler.

@@ -46,7 +46,8 @@ class Base(object):
         self.exist_bucket_key = self.key + "_exist_bucket"
         self.serializer = serializer
         # 对url进行分桶
-        self.bucket = BucketHash(1000)
+        self.bucket_size = spider.settings.getint('SCHEDULER_QUEUE_BUCKET_SIZE')
+        self.bucket = BucketHash(self.bucket_size)
 
     def _encode_request(self, request):
         """Encode a request object"""
@@ -148,7 +149,8 @@ class PriorityQueue(Base):
         # kwargs only accepts strings, not bytes.
         if score == 0:
             logger.info("[push] request url is {}".format(request.url))
-            bucket_key = self.key + "_" + "1001"
+            prio_bucket = self.bucket_size + 1
+            bucket_key = self.key + "_" + str(prio_bucket)
         logging.debug("[zadd] buket_key is {} start...".format(bucket_key))
         self.server.execute_command('ZADD', bucket_key, score, data)
         logging.debug("[zadd] buket_key is {} end...".format(bucket_key))
@@ -163,7 +165,8 @@ class PriorityQueue(Base):
         """
         logger.debug("[pop] key is {} start".format(self.key))
         # 先读优先级桶, 桶号为bucket_size + 1, 读最高优先级的桶，如果有直接返回
-        bucket_key = self.key + "_" + "1001"
+        prio_bucket = self.bucket_size + 1
+        bucket_key = self.key + "_" + str(prio_bucket)
         logger.debug("[pop] bucket_key is {} start".format(bucket_key))
         results = self.server.zrange(bucket_key, 0, 0)
         count = self.server.zremrangebyrank(bucket_key, 0, 0)
